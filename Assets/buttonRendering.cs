@@ -7,64 +7,80 @@ using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
 
 public class buttonRendering : MonoBehaviour {
-    public void Click()
-    {
-        Debug.Log("Button Clicked. TestClick.");
-    }
-
+    
     // Use this for initialization
     void Start () {
-        var btn = GetComponent<UnityEngine.UI.Button>();
-        btn.onClick.AddListener(clickButton);
-
+        btnRender = GetComponent<UnityEngine.UI.Button>();
+        btnRender.onClick.AddListener(clickButton);
     }
-	
-	// Update is called once per frame
-	void Update () {
-		
-	}
+
+    
+
+    UnityEngine.UI.Button btnRender;
 
     public int sceneMuilt = 1;
     public int samplify = 1;//采样
 
     public int maxDepth = 2;//递归深度
     public int reflectCount = 4;//递归深度
+    public bool isRefleat = false;
 
-    const float piInv = (float)(1/Math.PI);
-    const float manfanshe = (float)(1-1 / Math.PI/2);
-    float samplifyRate;//采样比例
     Light[] lights;
 
-    class RayInfo
-    {
-        public float x,y;
-        public Ray ray;
-        public Color color;
-    }
 
+    RaysCreater rayCreater;
+    DateTime startTime;
+    Texture2D image;
 
-    
-    public void clickButton()
-    {
-        var startTime = DateTime.Now;
+    // Update is called once per frame
+    void Update () {
 
-        samplifyRate = 1.0f / (samplify * samplify);
+        if (rayCreater == null || rayCreater.isFinish()) return;
 
-        List<RayInfo> rays = new List<RayInfo>();
+        List<RayInfo> rays;
+        rays = rayCreater.getRays(Camera.main, 1000);
 
-        float posScaleInv = 1 / sceneMuilt;
-        int height = (int)(Screen.height * sceneMuilt);
-        int width = (int)(Screen.width * sceneMuilt);
+        var process = rayCreater.finishCount * 1.0f / rayCreater.sum * 100;
+        Debug.Log(string.Format("正在渲染 {0:00.00}%,{1}/{2}，用时{3}"
+        , process
+        , rayCreater.finishCount
+        , rayCreater.sum
+        ,new TimeSpan((DateTime.Now - startTime).Ticks)
+        ));
 
-        for (int y = 0; y < height; y++)
+        foreach (var r in rays)
         {
-            for (int x = 0; x < width; x++)
-            {
-                rays.AddRange(createRays(x* posScaleInv,y* posScaleInv));
-            }
+            Vector3 point;
+            RayTracing(r.ray, out r.color, out point);
         }
 
+        foreach (var r in rays)
+        {
+            var curColor = image.GetPixel(r.x, r.y);
+            image.SetPixel(r.x, r.y, r.color * rayCreater.SamplifyInv2 + curColor);
+        }
 
+        if (rayCreater.isFinish())
+        {
+            TimeSpan times = new TimeSpan((DateTime.Now - startTime).Ticks);
+            Debug.Log("渲染完毕" + "，用时:" + times.ToString());
+            string file = "renderingTemp.png";
+            File.WriteAllBytes(file, image.EncodeToPNG());
+            Application.OpenURL(file);
+            btnRender.enabled = true;
+        }
+    }
+
+   
+
+    public void clickButton()
+    {
+        btnRender.enabled = false;
+        Debug.Log("开始渲染");
+        rayCreater = new RaysCreater(Screen.width, Screen.height);
+        rayCreater.Samplify = samplify;
+        startTime = DateTime.Now;
+        
         {
             List<Light> temp=new List<Light>();
             foreach (var obj in gameObject.scene.GetRootGameObjects())
@@ -74,103 +90,13 @@ public class buttonRendering : MonoBehaviour {
             this.lights = temp.ToArray();
         }
         Physics.queriesHitBackfaces = true;
-
-        foreach (var r in rays)
-        {
-            Vector3 point;
-            RayTracing(r.ray, out r.color, out point);
-        }
-
-        Texture2D image = new Texture2D(width, height);
-        foreach (var r in rays)
-        {
-            image.SetPixel((int)(r.x+0.5), (int)(r.y + 0.5), r.color);
-        }
-
-        var endTime = DateTime.Now;
-        TimeSpan times = new TimeSpan((endTime - startTime).Ticks);
-
-        Debug.Log("渲染完毕"+"，用时:"+ times.ToString());
-
-        string file = "renderingTemp.png";
-        File.WriteAllBytes(file, image.EncodeToPNG());
-        Application.OpenURL(file);
+        image = new Texture2D(rayCreater.Size.x, rayCreater.Size.y,TextureFormat.RGBAFloat,false);
+        for (int y = 0; y < image.height; y++)
+            for (int x = 0; x < image.width; x++)
+                image.SetPixel(x, y, Color.black);
     }
 
-    List<RayInfo> createRays(float x,float y)
-    {
-        List<RayInfo> ret = new List<RayInfo>();
-        RayInfo info = new RayInfo();
-        info.x = x;
-        info.y = y;
-        info.ray = Camera.main.ScreenPointToRay(new Vector3(x, y, 0));
-        ret.Add(info);
-
-        return ret;
-    }
-    class RaysCreater
-    {
-        Vector2Int size = new Vector2Int(0,0);
-        Vector2 scale = new Vector2(1,1);
-
-        public int Samplify { get { return samplify; }
-            set { samplify = value; samplifyInv = 1.0f / samplify; }
-        }
-        int samplify = 1;
-
-        public float SamplifyInv2 { get { return samplifyInv* samplifyInv; } }
-        public float SamplifyInv { get { return samplifyInv; } }
-        float samplifyInv = 1;
-
-        int x = 0, y=0;
-
-        public RaysCreater(int width,int height) {
-            size.x = width;
-            size.y = height;
-        }
-
-        public RaysCreater(int width, int height, int screenWidth, int screenHeight)
-        {
-            size.x = width;
-            size.y = height;
-            scale.x = screenWidth*1.0f / width;
-            scale.y = screenHeight * 1.0f / height;
-        }
-
-        public void reset() { x = y = 0; }
-
-        public List<Ray> getRays(Camera cam,int count=1)
-        {
-            List<Ray> ret = new List<Ray>();
-
-            for (; y < size.y; y++)
-            {
-                for (; x < size.x; x++)
-                {
-                    Vector3 p = new Vector3(x + 0.5f, y + 0.5f, 0);
-                    Vector3 sp = new Vector3(-(samplify-1)/2.0f, -(samplify - 1) / 2.0f, 0);
-
-                    for (int i = 0; i < samplify; i++)
-                    {
-                        for (int j = 0; j < samplify; j++)
-                        {
-                            sp.x += j * samplifyInv;
-                            sp.y += i * samplifyInv;
-                            var screenPoint = p + sp;
-                            screenPoint.x *= scale.x;
-                            screenPoint.y *= scale.y;
-
-                            var ray = cam.ScreenPointToRay(screenPoint);
-                            ret.Add(ray);
-                        }
-                    }
-                    
-                    if (ret.Count >= count) break;
-                }
-            }
-            return ret;
-        }
-    }
+    
 
 
 
@@ -265,7 +191,7 @@ public class buttonRendering : MonoBehaviour {
 
             //递归追踪,看似光源的一种
 
-            if(true)
+            if(isRefleat)
             {
                 var V = -ray.direction;
                 var N = hit.normal;

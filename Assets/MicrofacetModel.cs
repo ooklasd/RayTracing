@@ -150,14 +150,14 @@ class MicrofacetModel
 
     public List<Vector3> ReflectDirections(Vector3 N, Vector3 V, int count)
     {
-        if(d ==1)
+        if (d == 1)
             return ReflectDirectionsBall(N,V,count);
         else
             return ReflectDirectionsD(N, V, count);
     }
     public List<Vector3> ReflectDirectionsBall(Vector3 N, Vector3 V, int count)
     {
-        while(reflectBall.Count<count)
+        while (reflectBall.Count<count)
         {
             Vector3 L = new Vector3(
                 Random.Range(-1.0f, 1.0f)
@@ -165,37 +165,40 @@ class MicrofacetModel
                 , Random.Range(-1.0f, 1.0f)
                 );
             L.Normalize();
-            L += N;
             reflectBall.Add(L);
         }
 
-        return reflectBall;
+        List<Vector3> ret = new List<Vector3>(reflectBall.ToArray());
+        ret.ForEach(item => { item += N; item.Normalize(); });        
+        return ret;
     }
 
     public List<Vector3> ReflectDirectionsD(Vector3 N,Vector3 V,int count)
     {
         List<Vector3> ret = new List<Vector3>();
-        int errorCount = 0;
-        count--;
-        if (ret.Count == 0)
-            ret.Add(Vector3.Reflect(-V, N));
+        ret.Add(Vector3.Reflect(-V, N));
 
-        while (ret.Count < count)
-        {
-            Vector3 L = new Vector3(
-                Random.Range(-1.0f, 1.0f)
-                , Random.Range(-1.0f, 1.0f)
-                , Random.Range(0.0f, 2.0f)
-                );
-            L.Normalize();
-            if (D_Func(N, V, L) > 0.5)
-            {
-                ret.Add(L);
-                errorCount = 0;
-            }
-            else if (++errorCount > 20)
-                break;
-        }
+        //int errorCount = 0;
+        //count--;
+        //if (ret.Count == 0)
+        //    ret.Add(Vector3.Reflect(-V, N));
+
+        //while (ret.Count < count)
+        //{
+        //    Vector3 L = new Vector3(
+        //        Random.Range(-1.0f, 1.0f)
+        //        , Random.Range(-1.0f, 1.0f)
+        //        , Random.Range(0.0f, 2.0f)
+        //        );
+        //    L.Normalize();
+        //    if (D_Func(N, V, L) > 0.6)
+        //    {
+        //        ret.Add(L);
+        //        errorCount = 0;
+        //    }
+        //    else if (++errorCount > 20)
+        //        break;
+        //}
         return ret;
     }
 

@@ -1079,9 +1079,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   sceneMuilt: 1
-  samplify: 1
-  maxDepth: 2
-  reflectCount: 4
+  samplify: 4
+  maxDepth: 3
+  reflectCount: 3
+  isRefleat: 0
 --- !u!1 &1395945346
 GameObject:
   m_ObjectHideFlags: 0
