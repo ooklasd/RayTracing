@@ -169,7 +169,11 @@ class MicrofacetModel
         }
 
         List<Vector3> ret = new List<Vector3>(reflectBall.ToArray());
-        ret.ForEach(item => { item += N; item.Normalize(); });        
+        for (int i = 0; i < ret.Count; i++)
+        {
+            ret[i] += N;
+            ret[i].Normalize();
+        }     
         return ret;
     }
 

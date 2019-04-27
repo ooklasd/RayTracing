@@ -211,7 +211,8 @@ public class buttonRendering : MonoBehaviour {
                     {
                         float intensity = countInv;
                         float len = (hitPoint - refRay.origin).magnitude;
-                        intensity *= (float)(Math.Pow(1 - len / 30, 2));//光根据距离衰减
+                        if (len >= 30) continue;
+                        intensity *= (float)(Math.Pow(1 -  len / 30, 2));//光根据距离衰减
                         intensity *= Math.Max(0, Vector3.Dot(N, L));//光投影到面的衰减
                         reflectColor *= intensity;
 
