@@ -109,18 +109,20 @@ class MicrofacetModel
 
         //菲涅尔项
         double F = FresnelScale + (1 - FresnelScale) * Math.Pow(1 - Vector3.Dot(V, N), 5);
-
-
+        
         //朝向分布项
-        double D = D_Func(N,L,V);
+        double D = D_Beckmann(N,L,V);
 
         //阴影遮挡项
         float G = Math.Min(Vector3.Dot(N, V), Vector3.Dot(N, L)) * Vector3.Dot(N, H) * 2 / Vector3.Dot(H, V);
         G = Math.Min(1, G);
 
         float Rs = (float)(F * D * G) / (float)(Math.PI * Vector3.Dot(N, L) * Vector3.Dot(N, V));
-        //Rs = Math.Min(Rs, 1);
-        //Rs = Math.Max(Rs, 0);
+
+        if (float.IsNaN(Rs))
+            Rs = 0;
+
+
         return s * Rs;
     }
 
@@ -131,17 +133,41 @@ class MicrofacetModel
     /// <param name="L"></param>
     /// <param name="V"></param>
     /// <returns></returns>
-    double D_Func(Vector3 N, Vector3 L, Vector3 V)
+    double D_Beckmann(Vector3 N, Vector3 L, Vector3 V)
     {
-        double D = 1;
-        if (m > 0.05)
+        double D = 0;
+        if (m > 0.001)
         {
             //Beckmann分布
             var H = (L + V).normalized;
             var cosa = Vector3.Dot(N, H);
+            cosa = Math.Min(cosa, 1);
             var a = Math.Acos(cosa);
             var powE = Math.Pow(Math.Tan(a) / m, 2);
             D = 1 / (m * m * Math.Pow(cosa, 4)) * Math.Pow(Math.E, -powE);
+
+            if (double.IsNaN(D))
+                D = 0;
+        }
+
+       
+
+        return D;
+    }
+
+    double D_Blinn(Vector3 N, Vector3 L, Vector3 V)
+    {
+        double D = 0;
+        if (m > 0.001)
+        {
+            //Beckmann分布
+            var H = (L + V).normalized;
+            var cosa = Vector3.Dot(N, H);
+            cosa = Math.Min(cosa, 1);
+            var a = Math.Acos(cosa);
+            var powE = a/m;
+            const double C = Math.PI*2;
+            D = C * Math.Pow(Math.E, -powE);
         }
         return D;
     }
@@ -171,8 +197,9 @@ class MicrofacetModel
         List<Vector3> ret = new List<Vector3>(reflectBall.ToArray());
         for (int i = 0; i < ret.Count; i++)
         {
-            ret[i] += N;
-            ret[i].Normalize();
+            var item = ret[i];
+            item += N;
+            item.Normalize();
         }     
         return ret;
     }

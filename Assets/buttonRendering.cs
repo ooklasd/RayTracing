@@ -96,7 +96,19 @@ public class buttonRendering : MonoBehaviour {
                 image.SetPixel(x, y, Color.black);
     }
 
-    
+    static bool FixNLV(ref Vector3 N,Vector3 L,Vector3 V)
+    {
+        var dotNL = Vector3.Dot(N, L);
+        var dotNV = Vector3.Dot(N, V);
+
+        //如果不再同一平面，则认为被遮挡
+        if (dotNL * dotNV <= 0)
+            return false;
+        if (dotNL < 0)
+            N = -N;
+
+        return true;
+    }
 
 
 
@@ -173,6 +185,8 @@ public class buttonRendering : MonoBehaviour {
                             intensity *= (float)(Math.Pow(1 - len / light.range, 2));//光根据距离衰减
                             intensity *= Math.Max(0, Vector3.Dot(N, L));//光投影到面的衰减
 
+                            if (FixNLV(ref N, L, V) == false) continue;
+
                             //高光计算
                             slightColor += light.color* intensity * BRDF.getSIntensity(N,L,V);                       
 
@@ -199,9 +213,10 @@ public class buttonRendering : MonoBehaviour {
                 float countInv = 1.0f / dirs.Count;
                 foreach (var reflectDir in dirs)
                 {
-                    Ray refRay = new Ray(hit.point, reflectDir);
-
                     var L = reflectDir;
+                    Ray refRay = new Ray(hit.point, reflectDir);
+                    if (FixNLV(ref N, L, V) == false) continue;
+
                     var s = BRDF.getSIntensity(N, L, V);
                     var d = BRDF.getDIntensity();
 
