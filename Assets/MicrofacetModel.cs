@@ -201,6 +201,7 @@ class MicrofacetModel
             var item = ret[i];
             item += N;
             item.Normalize();
+            ret[i] = item;
         }     
         return ret;
     }

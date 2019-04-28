@@ -21,9 +21,10 @@ public class buttonRendering : MonoBehaviour {
     public int sceneMuilt = 1;
     public int samplify = 1;//采样
 
+    public bool isReflect = false;
     public int maxDepth = 2;//递归深度
     public int reflectCount = 4;//递归深度
-    public bool isRefleat = false;
+    public float refractiveIndices = 1.3f;
 
     Light[] lights;
 
@@ -57,8 +58,8 @@ public class buttonRendering : MonoBehaviour {
 
         foreach (var r in rays)
         {
-            Vector3 point;
-            RayTracing(r.ray, out r.color, out point);
+            RaycastHit info;
+            RayTracing(r.ray, out r.color, out info);
         }
 
         foreach (var r in rays)
@@ -119,26 +120,74 @@ public class buttonRendering : MonoBehaviour {
         return true;
     }
 
+    bool Refract(Vector3 V,Vector3 N,float ni_over_nt,out Vector3 refractV)
+    {
+        float dot = Vector3.Dot(V, N);
+        float discrimiant = 1.0f - ni_over_nt * ni_over_nt * (1 - dot*dot);
+        if (discrimiant > 0)
+        {
+            refractV = ni_over_nt * (V - N * dot) - N * (float)Math.Sqrt(discrimiant);
+            return true;
+        }
+        else
+        {
+            refractV = new Vector3();
+            return false;
+        }
+    }
 
 
-    bool RayTracing(Ray ray,out Color desColor,out Vector3 point,int depth = 0,float multi = 1)
+
+    private void ReflectFunc(Ray ray, RaycastHit hit, MicrofacetModel BRDF, int depth, float multi, ref Color slightColor, ref Color dlightColor)
+    {
+        //反射
+        var V = -ray.direction;
+        var N = hit.normal;
+        var dirs = BRDF.ReflectDirections(N, V, reflectCount);
+        float countInv = 1.0f / dirs.Count;
+        foreach (var reflectDir in dirs)
+        {
+            var L = reflectDir;
+            Ray refRay = new Ray(hit.point, reflectDir);
+            if (FixNLV(ref N, L, V) == false) continue;
+
+            var s = BRDF.getSIntensity(N, L, V);
+            var d = BRDF.getDIntensity();
+
+            Color reflectColor = Color.black;
+            RaycastHit reflecthit;
+            if (RayTracing(refRay, out reflectColor, out reflecthit, depth + 1, multi * Math.Max(s, d)))
+            {
+                float intensity = countInv;
+
+                reflectColor *= intensity;
+
+                //高光计算
+                slightColor += reflectColor * s;
+
+                //漫反射计算
+                dlightColor += reflectColor * d;
+            }
+        }
+    }
+
+    bool RayTracing(Ray ray,out Color desColor,out RaycastHit hit, int depth = 0,float multi = 1)
     {
         desColor = Color.black;
-        point = Vector3.zero;
+        hit = new RaycastHit();
         if (depth >= maxDepth) return false;
         if (multi < 0.001) return false;
 
-        RaycastHit hit;
         if (Physics.Raycast(ray,out hit))
         {
-            point = hit.point;
-
             //双向反射分布模型
             var BRDF = new MicrofacetModel();
 
             //表面颜色
             Color textureColor = Color.white;
             var meshRenderer = hit.transform.GetComponent<MeshRenderer>();
+
+            int mode = 0;
             if (meshRenderer && meshRenderer.material)
             {
                 var material = meshRenderer.material;
@@ -150,115 +199,120 @@ public class buttonRendering : MonoBehaviour {
                 }
 
                 //0不透明，3透明
-                int mode = material.GetInt("_Mode");
+                mode = material.GetInt("_Mode");
 
                 float Metallic = material.GetFloat("_Metallic");//金属
                 float Smoothness = material.GetFloat("_Glossiness");//高光分布
 
                 BRDF.S = Metallic;
-                BRDF.m = 1-Smoothness;
+                BRDF.m = 1 - Smoothness;
             }
 
             //次表面颜色
             Color subfaceColor = Color.black;
 
-
             Color slightColor = Color.black;
             Color dlightColor = Color.black;
 
-            foreach (var light in lights)
-            {
-                switch (light.type)
-                {
-                    case LightType.Spot:
-                        {
-
-                        }
-                        break;
-                    case LightType.Directional:
-                        break;
-                    case LightType.Point:
-                        {
-                            var L = light.transform.position - hit.point;
-                            var len = L.magnitude;
-                            L.Normalize();
-
-                            //点到光源之间被遮挡，阴影特效
-                            if (len > light.range || Physics.Raycast(hit.point+hit.normal*0.001f, L, len))
-                                break;
-                            var N = hit.normal;
-                            var V = -ray.direction;
-
-                            //在碰撞点上面的光强
-                            var intensity = light.intensity;
-                            intensity *= (float)(Math.Pow(1 - len / light.range, 2));//光根据距离衰减
-                            intensity *= Math.Max(0, Vector3.Dot(N, L));//光投影到面的衰减
-
-                            if (FixNLV(ref N, L, V) == false) continue;
-
-                            //高光计算
-                            slightColor += light.color* intensity * BRDF.getSIntensity(N,L,V);                       
-
-                            //漫反射计算
-                            dlightColor += light.color * intensity * BRDF.getDIntensity();//在半球上进行均匀漫反射 d*1/(2*pi)
-                        }
-                        break;
-                    case LightType.Area:
-                        break;
-                    default:
-                        break;
-                }
-            }
+            Lighting(ray, hit, BRDF, ref slightColor, ref dlightColor);
 
             var faceColor = textureColor + subfaceColor;
+            desColor = faceColor * dlightColor + slightColor;//漫反射
 
             //递归追踪,看似光源的一种
-
-            if(isRefleat)
+            if (isReflect)
             {
-                var V = -ray.direction;
-                var N = hit.normal;
-                var dirs = BRDF.ReflectDirections(N,V, reflectCount);
-                float countInv = 1.0f / dirs.Count;
-                foreach (var reflectDir in dirs)
+                var alpha = textureColor.a;
+                ReflectFunc(ray, hit, BRDF, depth, multi*textureColor.a, ref slightColor, ref dlightColor);
+
+                if (mode == 3 && refractiveIndices > 0.01f)
                 {
-                    var L = reflectDir;
-                    Ray refRay = new Ray(hit.point, reflectDir);
-                    if (FixNLV(ref N, L, V) == false) continue;
+                    var a = textureColor.a;
+                    Vector3 refractV;
 
-                    var s = BRDF.getSIntensity(N, L, V);
-                    var d = BRDF.getDIntensity();
-
-                    Color reflectColor = Color.black;
-                    Vector3 hitPoint;
-                    if (RayTracing(refRay, out reflectColor, out hitPoint, depth + 1, multi * Math.Max(s, d)))
+                    float ni_over_nt = refractiveIndices;
+                    var N = hit.normal;
+                    var V = -ray.direction;
+                    if (Vector3.Dot(V, N) <= 0)
                     {
-                        float intensity = countInv;
-                        float len = (hitPoint - refRay.origin).magnitude;
-                        if (len >= 30) continue;
-                        intensity *= (float)(Math.Pow(1 -  len / 30, 2));//光根据距离衰减
-                        intensity *= Math.Max(0, Vector3.Dot(N, L));//光投影到面的衰减
-                        reflectColor *= intensity;
+                        N = -N;
+                        ni_over_nt = 1 / ni_over_nt;
+                    }
 
-                        //高光计算
-                        slightColor += reflectColor * s;
 
-                        //漫反射计算
-                        dlightColor += reflectColor * d;
+                    if (Refract(V, N, ni_over_nt, out refractV))
+                    {
+                        Color refractIColor;
+                        RaycastHit refractInfo;
+                        if(RayTracing(new Ray(hit.point+N*0.001f,refractV),out refractIColor,out refractInfo,depth+1,multi*(1- alpha)))
+                        {
+                            desColor = a*desColor + (1 - a) * refractIColor;
+                        }
                     }
                 }
             }
-
-            desColor = faceColor * dlightColor+ slightColor;//漫反射
-            //for (int i = 0; i < 3; i++)
-            //{
-            //    desColor[i] = Math.Max(0, desColor[i]);
-            //    desColor[i] = Math.Min(1, desColor[i]);
-            //}
+            
+            //按照距离衰减
+            if(depth != 0)
+            {
+                float intensity = 1;
+                float len = (hit.point - ray.origin).magnitude;
+                if (len >= 30) intensity = 0;
+                intensity *= (float)(Math.Pow(1 - len / 30, 2));//光根据距离衰减
+                intensity *= Math.Max(0, Vector3.Dot(hit.normal,-ray.direction));//光投影到面的衰减
+                desColor *= intensity;
+            }
             desColor.a = 1;
             return true;
         }
 
         return false;
+    }
+
+    private void Lighting(Ray ray, RaycastHit hit, MicrofacetModel BRDF, ref Color slightColor, ref Color dlightColor)
+    {
+        foreach (var light in lights)
+        {
+            switch (light.type)
+            {
+                case LightType.Spot:
+                    {
+
+                    }
+                    break;
+                case LightType.Directional:
+                    break;
+                case LightType.Point:
+                    {
+                        var L = light.transform.position - hit.point;
+                        var len = L.magnitude;
+                        L.Normalize();
+
+                        //点到光源之间被遮挡，阴影特效
+                        if (len > light.range || Physics.Raycast(hit.point + hit.normal * 0.001f, L, len))
+                            break;
+                        var N = hit.normal;
+                        var V = -ray.direction;
+
+                        //在碰撞点上面的光强
+                        var intensity = light.intensity;
+                        intensity *= (float)(Math.Pow(1 - len / light.range, 2));//光根据距离衰减
+                        intensity *= Math.Max(0, Vector3.Dot(N, L));//光投影到面的衰减
+
+                        if (FixNLV(ref N, L, V) == false) continue;
+
+                        //高光计算
+                        slightColor += light.color * intensity * BRDF.getSIntensity(N, L, V);
+
+                        //漫反射计算
+                        dlightColor += light.color * intensity * BRDF.getDIntensity();//在半球上进行均匀漫反射 d*1/(2*pi)
+                    }
+                    break;
+                case LightType.Area:
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 }
