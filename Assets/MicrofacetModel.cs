@@ -122,6 +122,7 @@ class MicrofacetModel
         if (float.IsNaN(Rs))
             Rs = 0;
 
+        Rs = Math.Min(Rs, 1);
 
         return s * Rs;
     }

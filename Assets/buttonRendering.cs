@@ -40,13 +40,20 @@ public class buttonRendering : MonoBehaviour {
         List<RayInfo> rays;
         rays = rayCreater.getRays(Camera.main, 1000);
 
-        var process = rayCreater.finishCount * 1.0f / rayCreater.sum * 100;
-        Debug.Log(string.Format("正在渲染 {0:00.00}%,{1}/{2}，用时{3}"
-        , process
-        , rayCreater.finishCount
-        , rayCreater.sum
-        ,new TimeSpan((DateTime.Now - startTime).Ticks)
-        ));
+        {
+            var process = rayCreater.finishCount * 1.0f / rayCreater.sum ;
+            TimeSpan tpass = new TimeSpan((DateTime.Now - startTime).Ticks);
+            TimeSpan tremain = new TimeSpan((long)(tpass.Ticks / process * (1 - process)));
+
+            Debug.Log(string.Format("正在渲染 {0:00.00}%,{1}/{2}"
+            , process * 100
+            , rayCreater.finishCount
+            , rayCreater.sum
+            ) + string.Format(" 用时{0}:{1:00}:{2:00}", tpass.Hours, tpass.Minutes, tpass.Seconds)
+             + string.Format(" 剩余约{0}:{1:00}:{2:00}", tremain.Hours, tremain.Minutes, tremain.Seconds)
+            );
+        }
+        
 
         foreach (var r in rays)
         {
@@ -62,8 +69,10 @@ public class buttonRendering : MonoBehaviour {
 
         if (rayCreater.isFinish())
         {
-            TimeSpan times = new TimeSpan((DateTime.Now - startTime).Ticks);
-            Debug.Log("渲染完毕" + "，用时:" + times.ToString());
+            TimeSpan tpass = new TimeSpan((DateTime.Now - startTime).Ticks);
+            Debug.Log("渲染完毕"
+                + string.Format("，用时:{0}:{1}:{2}", tpass.Hours, tpass.Minutes, tpass.Seconds)
+                );
             string file = "renderingTemp.png";
             File.WriteAllBytes(file, image.EncodeToPNG());
             Application.OpenURL(file);
