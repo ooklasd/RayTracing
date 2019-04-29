@@ -199,7 +199,7 @@ class MicrofacetModel
         for (int i = 0; i < ret.Count; i++)
         {
             var item = ret[i];
-            item += N;
+            item += N*0.5f;
             item.Normalize();
             ret[i] = item;
         }     

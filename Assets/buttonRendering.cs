@@ -119,14 +119,14 @@ public class buttonRendering : MonoBehaviour {
 
         return true;
     }
-
-    bool Refract(Vector3 V,Vector3 N,float ni_over_nt,out Vector3 refractV)
+    
+    static bool Refract(Vector3 V,Vector3 N,float ni_over_nt,out Vector3 refractV)
     {
-        float dot = Vector3.Dot(V, N);
+        float dot = Vector3.Dot(-V, N);
         float discrimiant = 1.0f - ni_over_nt * ni_over_nt * (1 - dot*dot);
         if (discrimiant > 0)
         {
-            refractV = ni_over_nt * (V - N * dot) - N * (float)Math.Sqrt(discrimiant);
+            refractV = ni_over_nt * (-V - N * dot) - N * (float)Math.Sqrt(discrimiant);
             return true;
         }
         else
@@ -148,8 +148,8 @@ public class buttonRendering : MonoBehaviour {
         foreach (var reflectDir in dirs)
         {
             var L = reflectDir;
-            Ray refRay = new Ray(hit.point, reflectDir);
-            if (FixNLV(ref N, L, V) == false) continue;
+            Ray refRay = new Ray(hit.point + N * 0.001f, reflectDir);
+            //if (FixNLV(ref N, L, V) == false) continue;
 
             var s = BRDF.getSIntensity(N, L, V);
             var d = BRDF.getDIntensity();
@@ -180,6 +180,9 @@ public class buttonRendering : MonoBehaviour {
 
         if (Physics.Raycast(ray,out hit))
         {
+            //是否在物体内部发生碰撞
+            bool isOutside = Vector3.Dot(hit.normal, -ray.direction) > 0;
+
             //双向反射分布模型
             var BRDF = new MicrofacetModel();
 
@@ -208,22 +211,18 @@ public class buttonRendering : MonoBehaviour {
                 BRDF.m = 1 - Smoothness;
             }
 
-            //次表面颜色
-            Color subfaceColor = Color.black;
-
             Color slightColor = Color.black;
             Color dlightColor = Color.black;
+            Color refractColor = Color.black;
 
             Lighting(ray, hit, BRDF, ref slightColor, ref dlightColor);
 
-            var faceColor = textureColor + subfaceColor;
-            desColor = faceColor * dlightColor + slightColor;//漫反射
-
             //递归追踪,看似光源的一种
+            var alpha = textureColor.a;
             if (isReflect)
             {
-                var alpha = textureColor.a;
-                ReflectFunc(ray, hit, BRDF, depth, multi*textureColor.a, ref slightColor, ref dlightColor);
+                if(isOutside)
+                    ReflectFunc(ray, hit, BRDF, depth, multi* alpha, ref slightColor, ref dlightColor);
 
                 if (mode == 3 && refractiveIndices > 0.01f)
                 {
@@ -233,7 +232,7 @@ public class buttonRendering : MonoBehaviour {
                     float ni_over_nt = refractiveIndices;
                     var N = hit.normal;
                     var V = -ray.direction;
-                    if (Vector3.Dot(V, N) <= 0)
+                    if (isOutside==false)
                     {
                         N = -N;
                         ni_over_nt = 1 / ni_over_nt;
@@ -242,24 +241,29 @@ public class buttonRendering : MonoBehaviour {
 
                     if (Refract(V, N, ni_over_nt, out refractV))
                     {
-                        Color refractIColor;
                         RaycastHit refractInfo;
-                        if(RayTracing(new Ray(hit.point+N*0.001f,refractV),out refractIColor,out refractInfo,depth+1,multi*(1- alpha)))
+                        var m = multi * (1f - alpha);
+                        var rayRefract = new Ray(hit.point + refractV * 0.0001f, refractV);
+                        if (!RayTracing(rayRefract, out refractColor, out refractInfo, depth + 1, m))
                         {
-                            desColor = a*desColor + (1 - a) * refractIColor;
+                            int kk = 0;
+                            kk++;
                         }
                     }
                 }
             }
-            
+
+            var faceColor = textureColor ;
+            desColor = alpha*(faceColor * dlightColor + slightColor) + (1-alpha)* faceColor* refractColor;//漫反射
+
             //按照距离衰减
-            if(depth != 0)
+            if (depth != 0)
             {
                 float intensity = 1;
                 float len = (hit.point - ray.origin).magnitude;
-                if (len >= 30) intensity = 0;
-                intensity *= (float)(Math.Pow(1 - len / 30, 2));//光根据距离衰减
-                intensity *= Math.Max(0, Vector3.Dot(hit.normal,-ray.direction));//光投影到面的衰减
+                if (len >= 100) intensity = 0;
+                intensity *= (float)(Math.Pow(1 - len / 100, 2));//光根据距离衰减
+                intensity *= Math.Max(0, Vector3.Dot(hit.normal, -ray.direction));//光投影到面的衰减
                 desColor *= intensity;
             }
             desColor.a = 1;
@@ -299,7 +303,7 @@ public class buttonRendering : MonoBehaviour {
                         intensity *= (float)(Math.Pow(1 - len / light.range, 2));//光根据距离衰减
                         intensity *= Math.Max(0, Vector3.Dot(N, L));//光投影到面的衰减
 
-                        if (FixNLV(ref N, L, V) == false) continue;
+                        //if (FixNLV(ref N, L, V) == false) continue;
 
                         //高光计算
                         slightColor += light.color * intensity * BRDF.getSIntensity(N, L, V);
