@@ -39,7 +39,7 @@ public class buttonRendering : MonoBehaviour {
         if (rayCreater == null || rayCreater.isFinish()) return;
 
         List<RayInfo> rays;
-        rays = rayCreater.getRays(Camera.main, 1000);
+        rays = rayCreater.getRays(Camera.main, 500);
 
         {
             var process = rayCreater.finishCount * 1.0f / rayCreater.sum ;
@@ -232,7 +232,7 @@ public class buttonRendering : MonoBehaviour {
                     float ni_over_nt = refractiveIndices;
                     var N = hit.normal;
                     var V = -ray.direction;
-                    if (isOutside==false)
+                    if (!isOutside)
                     {
                         N = -N;
                         ni_over_nt = 1 / ni_over_nt;
