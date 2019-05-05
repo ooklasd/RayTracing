@@ -263,7 +263,7 @@ public class buttonRendering : MonoBehaviour {
                 float len = (hit.point - ray.origin).magnitude;
                 if (len >= 100) intensity = 0;
                 intensity *= (float)(Math.Pow(1 - len / 100, 2));//光根据距离衰减
-                intensity *= Math.Max(0, Vector3.Dot(hit.normal, -ray.direction));//光投影到面的衰减
+                //intensity *= Math.Max(0, Vector3.Dot(hit.normal, -ray.direction));//光投影到面的衰减
                 desColor *= intensity;
             }
             desColor.a = 1;
