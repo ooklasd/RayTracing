@@ -236,10 +236,11 @@ public class buttonRendering : MonoBehaviour {
                     {
                         N = -N;
                     }
-                    var F = (float)BRDF.Fresnel_Reflection(N, V);
 
                     if (Refract(V, N, ni_over_nt, out refractV))
                     {
+                        var F = (float)BRDF.Fresnel_Reflection(N,V);
+
                         RaycastHit refractInfo;
                         var m = multi * (1f - F);
                         var rayRefract = new Ray(hit.point + refractV * 0.0001f, refractV);

@@ -189,7 +189,7 @@ class MicrofacetModel
     }
     public List<Vector3> ReflectDirectionsBall(Vector3 N, Vector3 V, int count)
     {
-        return new List<Vector3>();
+        List<Vector3> reflectBall = new List<Vector3>();
         while (reflectBall.Count<count)
         {
             Vector3 L = new Vector3(
