@@ -20,11 +20,11 @@ public class buttonRendering : MonoBehaviour {
 
     public int sceneMuilt = 1;
     public int samplify = 1;//采样
+    public int maxDepth = 2;//递归深度
+    public float refractiveIndices = 1.3f;
 
     public bool isReflect = false;
-    public int maxDepth = 2;//递归深度
     public int reflectCount = 4;//递归深度
-    public float refractiveIndices = 1.3f;
 
     Light[] lights;
 
@@ -218,43 +218,48 @@ public class buttonRendering : MonoBehaviour {
             Lighting(ray, hit, BRDF, ref slightColor, ref dlightColor);
 
             //递归追踪,看似光源的一种
-            var alpha = textureColor.a;
+            bool isRefract = false;
             if (isReflect)
             {
-                if(isOutside)
-                    ReflectFunc(ray, hit, BRDF, depth, multi* alpha, ref slightColor, ref dlightColor);
-
                 if (mode == 3 && refractiveIndices > 0.01f)
                 {
-                    var a = textureColor.a;
                     Vector3 refractV;
 
                     float ni_over_nt = refractiveIndices;
                     var N = hit.normal;
                     var V = -ray.direction;
-                    if (!isOutside)
+                    if (isOutside)
                     {
-                        N = -N;
                         ni_over_nt = 1 / ni_over_nt;
                     }
-
+                    else
+                    {
+                        N = -N;
+                    }
+                    var F = (float)BRDF.Fresnel_Reflection(N, V);
 
                     if (Refract(V, N, ni_over_nt, out refractV))
                     {
                         RaycastHit refractInfo;
-                        var m = multi * (1f - alpha);
+                        var m = multi * (1f - F);
                         var rayRefract = new Ray(hit.point + refractV * 0.0001f, refractV);
-                        if (!RayTracing(rayRefract, out refractColor, out refractInfo, depth + 1, m))
-                        {
-                            int kk = 0;
-                            kk++;
-                        }
+                        RayTracing(rayRefract, out refractColor, out refractInfo, depth + 1, m);
+                        isRefract = true;
+                        refractColor *= 1 - F;
                     }
                 }
+
+                if (!isOutside)
+                {
+                    hit.normal = -hit.normal;
+                }
+                ReflectFunc(ray, hit, BRDF, depth, multi, ref slightColor, ref dlightColor);
             }
 
             var faceColor = textureColor ;
-            desColor = alpha*(faceColor * dlightColor + slightColor) + (1-alpha)* faceColor* refractColor;//漫反射
+            desColor = faceColor * dlightColor + slightColor;
+            if(isRefract)
+                desColor += faceColor* refractColor;//漫反射
 
             //按照距离衰减
             if (depth != 0)

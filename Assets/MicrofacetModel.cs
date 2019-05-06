@@ -108,7 +108,7 @@ class MicrofacetModel
         var H = (L + V).normalized;
 
         //菲涅尔项
-        double F = FresnelScale + (1 - FresnelScale) * Math.Pow(1 - Vector3.Dot(V, N), 5);
+        double F = Fresnel_Reflection(N,V);
         
         //朝向分布项
         double D = D_Beckmann(N,L,V);
@@ -125,6 +125,11 @@ class MicrofacetModel
         Rs = Math.Min(Rs, 1);
 
         return s * Rs;
+    }
+
+    public double Fresnel_Reflection(Vector3 N, Vector3 V)
+    {
+        return FresnelScale + (1 - FresnelScale) * Math.Pow(1 - Vector3.Dot(V, N), 5);
     }
 
     /// <summary>
@@ -184,6 +189,7 @@ class MicrofacetModel
     }
     public List<Vector3> ReflectDirectionsBall(Vector3 N, Vector3 V, int count)
     {
+        return new List<Vector3>();
         while (reflectBall.Count<count)
         {
             Vector3 L = new Vector3(
