@@ -1339,7 +1339,7 @@ MonoBehaviour:
   maxDepth: 10
   refractiveIndices: 1.5
   isReflect: 1
-  reflectCount: 1
+  reflectCount: 4
 --- !u!1 &1395945346
 GameObject:
   m_ObjectHideFlags: 0
